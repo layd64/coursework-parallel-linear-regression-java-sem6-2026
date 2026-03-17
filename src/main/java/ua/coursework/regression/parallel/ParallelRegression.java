@@ -12,18 +12,26 @@ import java.util.concurrent.atomic.DoubleAdder;
 public class ParallelRegression {
 
     private final int numberOfThreads;
+    private final int taskMultiplier;
 
 
-    public ParallelRegression(int numberOfThreads) {
+    public ParallelRegression(int numberOfThreads, int taskMultiplier) {
         if (numberOfThreads < 1) {
             throw new IllegalArgumentException("Number of threads must be >= 1");
         }
+        if (taskMultiplier < 1) {
+            throw new IllegalArgumentException("Task multiplier must be >= 1");
+        }
         this.numberOfThreads = numberOfThreads;
+        this.taskMultiplier = taskMultiplier;
     }
 
+    public ParallelRegression(int numberOfThreads) {
+        this(numberOfThreads, 10);
+    }
 
     public ParallelRegression() {
-        this(Runtime.getRuntime().availableProcessors());
+        this(Runtime.getRuntime().availableProcessors(), 10);
     }
 
 
@@ -53,15 +61,18 @@ public class ParallelRegression {
             }
             DoubleAdder sumYAdder = new DoubleAdder();
 
-            int chunkSize = (int) Math.ceil((double) m / numberOfThreads);
-            int actualChunks = (int) Math.ceil((double) m / chunkSize);
-            CountDownLatch meanLatch = new CountDownLatch(actualChunks);
+            int numTasks = numberOfThreads * taskMultiplier;
+            if (numTasks > m) numTasks = m;
+            int baseSize = m / numTasks;
+            int remainder = m % numTasks;
+            CountDownLatch meanLatch = new CountDownLatch(numTasks);
 
-            for (int i = 0; i < numberOfThreads; i++) {
-                int startIndex = i * chunkSize;
-                int endIndex = Math.min(startIndex + chunkSize, m);
-                if (startIndex >= m)
-                    break;
+            int offset = 0;
+            for (int i = 0; i < numTasks; i++) {
+                int currentChunkSize = baseSize + (i < remainder ? 1 : 0);
+                int startIndex = offset;
+                int endIndex = offset + currentChunkSize;
+                offset = endIndex;
 
                 List<DataPoint> chunk = dataPoints.subList(startIndex, endIndex);
                 final int numVars = n;
@@ -99,13 +110,14 @@ public class ParallelRegression {
             }
             DoubleAdder varYAdder = new DoubleAdder();
 
-            CountDownLatch stdLatch = new CountDownLatch(actualChunks);
+            CountDownLatch stdLatch = new CountDownLatch(numTasks);
 
-            for (int i = 0; i < numberOfThreads; i++) {
-                int startIndex = i * chunkSize;
-                int endIndex = Math.min(startIndex + chunkSize, m);
-                if (startIndex >= m)
-                    break;
+            offset = 0;
+            for (int i = 0; i < numTasks; i++) {
+                int currentChunkSize = baseSize + (i < remainder ? 1 : 0);
+                int startIndex = offset;
+                int endIndex = offset + currentChunkSize;
+                offset = endIndex;
 
                 List<DataPoint> chunk = dataPoints.subList(startIndex, endIndex);
                 final int numVars = n;
@@ -151,13 +163,14 @@ public class ParallelRegression {
                     xtxAdders[j][k] = new DoubleAdder();
                 }
             }
-            CountDownLatch matrixLatch = new CountDownLatch(actualChunks);
+            CountDownLatch matrixLatch = new CountDownLatch(numTasks);
 
-            for (int i = 0; i < numberOfThreads; i++) {
-                int startIndex = i * chunkSize;
-                int endIndex = Math.min(startIndex + chunkSize, m);
-                if (startIndex >= m)
-                    break;
+            offset = 0;
+            for (int i = 0; i < numTasks; i++) {
+                int currentChunkSize = baseSize + (i < remainder ? 1 : 0);
+                int startIndex = offset;
+                int endIndex = offset + currentChunkSize;
+                offset = endIndex;
 
                 List<DataPoint> chunk = dataPoints.subList(startIndex, endIndex);
                 executor.submit(new MatrixAccumulationTask(
@@ -178,17 +191,37 @@ public class ParallelRegression {
             }
 
 
-            double[] normCoefficients = SequentialRegression.solveLinearSystem(xtx, xty, p);
+            double[] normCoefficients = solveLinearSystemParallel(xtx, xty, p, executor);
 
 
             double[] coefficients = new double[p];
+            final double finalStdDevY = stdDevY;
+            final double finalMeanY = meanY;
+
+            CountDownLatch denormLatch = new CountDownLatch(n);
             for (int j = 1; j < p; j++) {
-                coefficients[j] = normCoefficients[j] * stdDevY / stdDevsX[j - 1];
+                final int jj = j;
+                executor.submit(() -> {
+                    coefficients[jj] = normCoefficients[jj] * finalStdDevY / stdDevsX[jj - 1];
+                    denormLatch.countDown();
+                });
             }
-            coefficients[0] = meanY + stdDevY * normCoefficients[0];
-            for (int j = 0; j < n; j++) {
-                coefficients[0] -= coefficients[j + 1] * meansX[j];
+            denormLatch.await();
+
+            DoubleAdder interceptAdder = new DoubleAdder();
+            interceptAdder.add(finalMeanY + finalStdDevY * normCoefficients[0]);
+            CountDownLatch interceptLatch = new CountDownLatch(n);
+            for (int j = 1; j < p; j++) {
+                final int jj = j;
+                executor.submit(() -> {
+                    interceptAdder.add(-coefficients[jj] * meansX[jj - 1]);
+                    interceptLatch.countDown();
+                });
             }
+            interceptLatch.await();
+            coefficients[0] = interceptAdder.sum();
+
+            int finalNumTasks = numTasks;
 
             long endTime = System.nanoTime();
             double computationTime = (endTime - startTime) / 1_000_000.0;
@@ -198,15 +231,15 @@ public class ParallelRegression {
 
 
             double rSquared = calculateRSquaredParallel(dataPoints, result, meanY, executor,
-                    chunkSize, actualChunks);
+                    finalNumTasks);
             result.setRSquared(rSquared);
 
-            double adjustedR2 = 1 - (1 - rSquared) * (m - 1.0) / (m - p);
+            double adjustedR2 = 1 - (1 - rSquared) * (m - 1.0) / (m - p - 1);
             result.setAdjustedRSquared(adjustedR2);
 
 
             calculateSignificanceParallel(dataPoints, result, xtx, executor,
-                    chunkSize, actualChunks);
+                    finalNumTasks);
 
             return result;
 
@@ -231,21 +264,23 @@ public class ParallelRegression {
             RegressionResult result,
             double meanY,
             ExecutorService executor,
-            int chunkSize, int actualChunks)
+            int numTasks)
             throws InterruptedException {
 
         int m = dataPoints.size();
-
+        int baseSize = m / numTasks;
+        int remainder = m % numTasks;
 
         DoubleAdder ssTotalAdder = new DoubleAdder();
         DoubleAdder ssResidualAdder = new DoubleAdder();
-        CountDownLatch r2Latch = new CountDownLatch(actualChunks);
+        CountDownLatch r2Latch = new CountDownLatch(numTasks);
 
-        for (int i = 0; i < numberOfThreads; i++) {
-            int startIndex = i * chunkSize;
-            int endIndex = Math.min(startIndex + chunkSize, m);
-            if (startIndex >= m)
-                break;
+        int offset = 0;
+        for (int i = 0; i < numTasks; i++) {
+            int currentChunkSize = baseSize + (i < remainder ? 1 : 0);
+            int startIndex = offset;
+            int endIndex = offset + currentChunkSize;
+            offset = endIndex;
 
             List<DataPoint> chunk = dataPoints.subList(startIndex, endIndex);
             executor.submit(new RSquaredTask(chunk, result, meanY,
@@ -266,21 +301,23 @@ public class ParallelRegression {
             RegressionResult result,
             double[][] xtx,
             ExecutorService executor,
-            int chunkSize, int actualChunks)
+            int numTasks)
             throws InterruptedException {
 
         int m = dataPoints.size();
         int p = result.getNumberOfVariables() + 1;
-
+        int baseSize = m / numTasks;
+        int remainder = m % numTasks;
 
         DoubleAdder ssResAdder = new DoubleAdder();
-        CountDownLatch sigLatch = new CountDownLatch(actualChunks);
+        CountDownLatch sigLatch = new CountDownLatch(numTasks);
 
-        for (int i = 0; i < numberOfThreads; i++) {
-            int startIndex = i * chunkSize;
-            int endIndex = Math.min(startIndex + chunkSize, m);
-            if (startIndex >= m)
-                break;
+        int offset = 0;
+        for (int i = 0; i < numTasks; i++) {
+            int currentChunkSize = baseSize + (i < remainder ? 1 : 0);
+            int startIndex = offset;
+            int endIndex = offset + currentChunkSize;
+            offset = endIndex;
 
             List<DataPoint> chunk = dataPoints.subList(startIndex, endIndex);
             executor.submit(() -> {
@@ -326,8 +363,80 @@ public class ParallelRegression {
         result.setPValues(pValues);
     }
 
+
+    private static double[] solveLinearSystemParallel(double[][] A, double[] b, int n,
+            ExecutorService executor) throws InterruptedException {
+
+        double[][] a = new double[n][n];
+        double[] rhs = new double[n];
+        for (int i = 0; i < n; i++) {
+            a[i] = A[i].clone();
+            rhs[i] = b[i];
+        }
+
+        for (int k = 0; k < n; k++) {
+
+            int maxRow = k;
+            double maxVal = Math.abs(a[k][k]);
+            for (int i = k + 1; i < n; i++) {
+                if (Math.abs(a[i][k]) > maxVal) {
+                    maxVal = Math.abs(a[i][k]);
+                    maxRow = i;
+                }
+            }
+
+            double[] tempRow = a[k];
+            a[k] = a[maxRow];
+            a[maxRow] = tempRow;
+            double tempVal = rhs[k];
+            rhs[k] = rhs[maxRow];
+            rhs[maxRow] = tempVal;
+
+            if (Math.abs(a[k][k]) < 1e-12) {
+                throw new ArithmeticException(
+                        "Matrix is singular or nearly singular at column " + k +
+                        ". Check for multicollinearity or duplicate variables.");
+            }
+
+            int remainingRows = n - k - 1;
+            if (remainingRows > 0) {
+                CountDownLatch latch = new CountDownLatch(remainingRows);
+                final int kk = k;
+                for (int i = k + 1; i < n; i++) {
+                    final int ii = i;
+                    executor.submit(() -> {
+                        double factor = a[ii][kk] / a[kk][kk];
+                        for (int j = kk; j < n; j++) {
+                            a[ii][j] -= factor * a[kk][j];
+                        }
+                        rhs[ii] -= factor * rhs[kk];
+                        latch.countDown();
+                    });
+                }
+                latch.await();
+            }
+        }
+
+        double[] x = new double[n];
+        for (int i = n - 1; i >= 0; i--) {
+            x[i] = rhs[i];
+            for (int j = i + 1; j < n; j++) {
+                x[i] -= a[i][j] * x[j];
+            }
+            if (Math.abs(a[i][i]) > 1e-12) {
+                x[i] /= a[i][i];
+            }
+        }
+
+        return x;
+    }
+
     public int getNumberOfThreads() {
         return numberOfThreads;
+    }
+
+    public int getTaskMultiplier() {
+        return taskMultiplier;
     }
 
 

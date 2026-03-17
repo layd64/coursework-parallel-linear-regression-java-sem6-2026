@@ -49,14 +49,15 @@ public class SequentialRegression {
             }
             stdDevY += Math.pow(point.getY() - meanY, 2);
         }
+
+        stdDevY = Math.sqrt(stdDevY / (m - 1));
+        if (stdDevY == 0)
+            stdDevY = 1;
         for (int j = 0; j < n; j++) {
             stdDevsX[j] = Math.sqrt(stdDevsX[j] / (m - 1));
             if (stdDevsX[j] == 0)
                 stdDevsX[j] = 1;
         }
-        stdDevY = Math.sqrt(stdDevY / (m - 1));
-        if (stdDevY == 0)
-            stdDevY = 1;
 
 
 
@@ -94,12 +95,10 @@ public class SequentialRegression {
 
 
         double[] coefficients = new double[p];
+        coefficients[0] = meanY + stdDevY * normCoefficients[0];
         for (int j = 1; j < p; j++) {
             coefficients[j] = normCoefficients[j] * stdDevY / stdDevsX[j - 1];
-        }
-        coefficients[0] = meanY + stdDevY * normCoefficients[0];
-        for (int j = 0; j < n; j++) {
-            coefficients[0] -= coefficients[j + 1] * meansX[j];
+            coefficients[0] -= coefficients[j] * meansX[j - 1];
         }
 
         long endTime = System.nanoTime();
@@ -114,7 +113,7 @@ public class SequentialRegression {
         double rSquared = calculateRSquared(dataPoints, result, meanY);
         result.setRSquared(rSquared);
 
-        double adjustedR2 = 1 - (1 - rSquared) * (m - 1.0) / (m - p);
+        double adjustedR2 = 1 - (1 - rSquared) * (m - 1.0) / (m - p - 1);
         result.setAdjustedRSquared(adjustedR2);
 
 

@@ -34,7 +34,7 @@ public class DataGenerator {
                 y += coefficients[j + 1] * x[j];
             }
 
-            y += random.nextGaussian() * noiseLevel;
+            y += random.nextGaussian() * y * noiseLevel;
             dataPoints.add(new DataPoint(x, y));
         }
 
@@ -52,8 +52,9 @@ public class DataGenerator {
 
         for (int i = 0; i < size; i++) {
             double x = i * 0.1;
-            double noise = random.nextGaussian() * noiseLevel;
-            double y = a + b * x + noise;
+            double y = a + b * x;
+            double noise = random.nextGaussian() * y * noiseLevel;
+            y += noise;
             dataPoints.add(new DataPoint(new double[]{x}, y));
         }
 

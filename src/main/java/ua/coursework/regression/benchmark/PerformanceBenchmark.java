@@ -30,6 +30,7 @@ public class PerformanceBenchmark {
         public final int dataSize;
         public final int numberOfThreads;
         public final int numberOfVariables;
+        public final int taskMultiplier;
         public final double sequentialTimeMs;
         public final double parallelTimeMs;
         public final double speedup;
@@ -40,9 +41,19 @@ public class PerformanceBenchmark {
                 double sequentialTimeMs, double parallelTimeMs,
                 RegressionResult sequentialResult,
                 RegressionResult parallelResult) {
+            this(dataSize, numberOfThreads, numberOfVariables, 10,
+                    sequentialTimeMs, parallelTimeMs, sequentialResult, parallelResult);
+        }
+
+        public BenchmarkResult(int dataSize, int numberOfThreads, int numberOfVariables,
+                int taskMultiplier,
+                double sequentialTimeMs, double parallelTimeMs,
+                RegressionResult sequentialResult,
+                RegressionResult parallelResult) {
             this.dataSize = dataSize;
             this.numberOfThreads = numberOfThreads;
             this.numberOfVariables = numberOfVariables;
+            this.taskMultiplier = taskMultiplier;
             this.sequentialTimeMs = sequentialTimeMs;
             this.parallelTimeMs = parallelTimeMs;
             this.speedup = sequentialTimeMs / Math.max(0.001, parallelTimeMs);
@@ -125,6 +136,55 @@ public class PerformanceBenchmark {
                 data.size(),
                 numberOfThreads,
                 numberOfVariables,
+                median(seqTimes),
+                median(parTimes),
+                lastSeqResult,
+                lastParResult);
+    }
+
+
+    public BenchmarkResult runBenchmarkWithTaskMultiplier(List<DataPoint> data,
+            int numberOfThreads, int numberOfVariables, int taskMultiplier) {
+        ParallelRegression parallelRegression = new ParallelRegression(numberOfThreads, taskMultiplier);
+
+        int repetitions = batchRepetitions(data.size());
+
+        for (int i = 0; i < LOCAL_WARMUP_RUNS; i++) {
+            for (int r = 0; r < repetitions; r++) {
+                sequentialRegression.calculate(data);
+            }
+            for (int r = 0; r < repetitions; r++) {
+                parallelRegression.calculate(data);
+            }
+        }
+
+        double[] seqTimes = new double[BENCHMARK_RUNS];
+        double[] parTimes = new double[BENCHMARK_RUNS];
+        RegressionResult lastSeqResult = null;
+        RegressionResult lastParResult = null;
+
+        for (int run = 0; run < BENCHMARK_RUNS; run++) {
+            long seqStart = System.nanoTime();
+            for (int r = 0; r < repetitions; r++) {
+                lastSeqResult = sequentialRegression.calculate(data);
+            }
+            seqTimes[run] = (System.nanoTime() - seqStart) / 1_000_000.0 / repetitions;
+
+            long parStart = System.nanoTime();
+            for (int r = 0; r < repetitions; r++) {
+                lastParResult = parallelRegression.calculate(data);
+            }
+            parTimes[run] = (System.nanoTime() - parStart) / 1_000_000.0 / repetitions;
+        }
+
+        Arrays.sort(seqTimes);
+        Arrays.sort(parTimes);
+
+        return new BenchmarkResult(
+                data.size(),
+                numberOfThreads,
+                numberOfVariables,
+                taskMultiplier,
                 median(seqTimes),
                 median(parTimes),
                 lastSeqResult,

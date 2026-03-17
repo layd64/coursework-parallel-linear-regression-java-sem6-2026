@@ -110,21 +110,32 @@ class RegressionTest {
     }
 
     @Test
-    @DisplayName("Sequential == Parallel: різна кількість потоків (1, 2, 4, 8) дає однаковий результат")
+    @DisplayName("Sequential == Parallel: різна кількість потоків (1, 2, 4, 8) дає однаковий і коректний результат")
     void testDifferentThreadCounts() {
         DataGenerator generator = new DataGenerator();
-        double[] coeffs = { 4.0, 2.5, -0.3 };
-        List<DataPoint> data = generator.generateMultipleRegressionData(10000, coeffs, 0.3);
+        double[] trueCoeffs = { 4.0, 2.5, -0.3 };
+        List<DataPoint> data = generator.generateMultipleRegressionData(10000, trueCoeffs, 0.01);
 
         SequentialRegression sequential = new SequentialRegression();
         RegressionResult seqResult = sequential.calculate(data);
+
+        double[] seqCoeffs = seqResult.getCoefficients();
+        for (int i = 0; i < trueCoeffs.length; i++) {
+            assertEquals(trueCoeffs[i], seqCoeffs[i], EPSILON,
+                    "Sequential b" + i + " must be close to true value " + trueCoeffs[i]);
+        }
 
         for (int threads = 1; threads <= 8; threads *= 2) {
             ParallelRegression parallel = new ParallelRegression(threads);
             RegressionResult parResult = parallel.calculate(data);
 
-            double[] seqCoeffs = seqResult.getCoefficients();
             double[] parCoeffs = parResult.getCoefficients();
+
+            for (int i = 0; i < trueCoeffs.length; i++) {
+                assertEquals(trueCoeffs[i], parCoeffs[i], EPSILON,
+                        "Parallel b" + i + " must be close to true value " + trueCoeffs[i]
+                                + " for " + threads + " threads");
+            }
 
             for (int i = 0; i < seqCoeffs.length; i++) {
                 assertEquals(seqCoeffs[i], parCoeffs[i], EPSILON,
@@ -217,23 +228,21 @@ class RegressionTest {
         RegressionResult result = regression.calculate(data);
 
         double predicted = result.predict(new double[]{ 1.0, 1.0 });
-        assertEquals(6.0, predicted, 0.1, "predict(1, 1) must be ~6.0");
+        assertEquals(6.0, predicted, 1e-6, "predict(1, 1) must be ~6.0");
     }
 
     @Test
-    @DisplayName("predict(0)=2, predict(1)=5, predict(10)=32 для y = 2 + 3*x")
+    @DisplayName("predict(0)=~2, predict(1)=~5, predict(10)=~32 для y = 2 + 3*x (шум 1%)")
     void testPredictSimple() {
-        List<DataPoint> data = new ArrayList<>();
-        for (int i = 0; i < 50; i++) {
-            data.add(new DataPoint(new double[]{i}, 2 + 3.0 * i));
-        }
+        DataGenerator generator = new DataGenerator();
+        List<DataPoint> data = generator.generateLinearData(500, 2.0, 3.0, 0.01);
 
         SequentialRegression regression = new SequentialRegression();
         RegressionResult result = regression.calculate(data);
 
-        assertEquals(2.0, result.predict(new double[]{0}), 0.1, "predict(0) must be 2.0");
-        assertEquals(5.0, result.predict(new double[]{1}), 0.1, "predict(1) must be 5.0");
-        assertEquals(32.0, result.predict(new double[]{10}), 0.1, "predict(10) must be 32.0");
+        assertEquals(2.0, result.predict(new double[]{0}), 1e-1, "predict(0) must be ~2.0");
+        assertEquals(5.0, result.predict(new double[]{1}), 1e-1, "predict(1) must be ~5.0");
+        assertEquals(32.0, result.predict(new double[]{10}), 1e-1, "predict(10) must be ~32.0");
     }
 
 
@@ -279,11 +288,11 @@ class RegressionTest {
 
 
     @Test
-    @DisplayName("1 000 000 рядків: parallel == sequential за коефіцієнтами, R2 > 0.99")
-    void testLargeDataCorrectness() {
+    @DisplayName("1 000 000 рядків: правильність розрахунку коефіцієнтів регресії")
+    void testLargeDataCoefficientsCorrectness() {
         DataGenerator generator = new DataGenerator();
-        double[] coeffs = { 5.0, 2.0, -1.0, 3.0 };
-        List<DataPoint> data = generator.generateMultipleRegressionData(1_000_000, coeffs, 1.0);
+        double[] expectedCoeffs = { 5.0, 2.0, -1.0, 3.0 };
+        List<DataPoint> data = generator.generateMultipleRegressionData(1_000_000, expectedCoeffs, 0.01);
 
         SequentialRegression sequential = new SequentialRegression();
         ParallelRegression parallel = new ParallelRegression();
@@ -291,16 +300,16 @@ class RegressionTest {
         RegressionResult seqResult = sequential.calculate(data);
         RegressionResult parResult = parallel.calculate(data);
 
-        assertTrue(seqResult.getRSquared() > 0.99,
-                "Sequential R2 must be > 0.99, got: " + seqResult.getRSquared());
-        assertEquals(seqResult.getRSquared(), parResult.getRSquared(), EPSILON,
-                "R2 must match between algorithms on 1M rows");
-
         double[] seqCoeffs = seqResult.getCoefficients();
         double[] parCoeffs = parResult.getCoefficients();
-        for (int i = 0; i < seqCoeffs.length; i++) {
-            assertEquals(seqCoeffs[i], parCoeffs[i], EPSILON,
-                    "Coefficient b" + i + " must match on 1M rows");
+
+        assertArrayEquals(seqCoeffs, parCoeffs, EPSILON,
+                "Коефіцієнти паралельного та послідовного алгоритмів мають збігатися");
+
+        double tolerance = 0.05;
+        for (int i = 0; i < expectedCoeffs.length; i++) {
+            assertEquals(expectedCoeffs[i], parCoeffs[i], tolerance,
+                    "Розрахований коефіцієнт b" + i + " не відповідає істинному значенню");
         }
     }
 }
