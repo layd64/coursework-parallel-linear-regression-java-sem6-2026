@@ -17,8 +17,6 @@ class RegressionTest {
 
     private static final double EPSILON = 0.01;
 
-
-
     @Test
     @DisplayName("Sequential: ідеальні дані (y = 3 + 4*x), ручна генерація")
     void testSequentialWithPerfectData() {
@@ -53,8 +51,6 @@ class RegressionTest {
         assertEquals(0.5, coefficients[3], EPSILON, "b3 has to be ~0.5");
     }
 
-
-
     @Test
     @DisplayName("Parallel: ідеальні дані (y = 5 + 2*x1), 4 потоки")
     void testParallelWithPerfectData() {
@@ -67,8 +63,6 @@ class RegressionTest {
         assertEquals(5.0, result.getCoefficients()[0], EPSILON, "b0 has to be 5.0");
         assertEquals(2.0, result.getCoefficients()[1], EPSILON, "b1 has to be 2.0");
     }
-
-
 
     @Test
     @DisplayName("Sequential == Parallel: коефіцієнти на зашумлених даних (noise=0.5)")
@@ -144,8 +138,6 @@ class RegressionTest {
         }
     }
 
-
-
     @Test
     @DisplayName("R2 близький до 1.0 для ідеальних даних")
     void testRSquaredPerfectData() {
@@ -159,8 +151,6 @@ class RegressionTest {
         assertTrue(result.getRSquared() > 0.999,
                 "R2 must be >= 0.999 for perfect data, got: " + result.getRSquared());
     }
-
-
 
     @Test
     @DisplayName("p-value < 0.05 для явних коефіцієнтів (велике значення, малий шум)")
@@ -198,8 +188,6 @@ class RegressionTest {
                 "Number of t-statistics must equal number of coefficients");
     }
 
-
-
     @Test
     @DisplayName("Параметри нормалізації зберігаються у результаті")
     void testNormalizationParametersStored() {
@@ -214,8 +202,6 @@ class RegressionTest {
         assertNotNull(result.getMeansX(), "MeansX must be stored");
         assertNotNull(result.getStdDevsX(), "StdDevsX must be stored");
     }
-
-
 
     @Test
     @DisplayName("predict(1, 1) = 1 + 2*1 + 3*1 = 6.0 для y = 1 + 2*x1 + 3*x2")
@@ -244,8 +230,6 @@ class RegressionTest {
         assertEquals(5.0, result.predict(new double[]{1}), 1e-1, "predict(1) must be ~5.0");
         assertEquals(32.0, result.predict(new double[]{10}), 1e-1, "predict(10) must be ~32.0");
     }
-
-
 
     @Test
     @DisplayName("Sequential: IllegalArgumentException для порожнього списку")
@@ -284,8 +268,6 @@ class RegressionTest {
         assertThrows(IllegalArgumentException.class, () -> parallel.calculate(data),
                 "Parallel must throw exception for empty list");
     }
-
-
 
     @Test
     @DisplayName("1 000 000 рядків: правильність розрахунку коефіцієнтів регресії")

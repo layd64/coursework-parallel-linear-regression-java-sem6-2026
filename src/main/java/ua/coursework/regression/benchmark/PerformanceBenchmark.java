@@ -8,13 +8,10 @@ import ua.coursework.regression.sequential.SequentialRegression;
 import java.util.Arrays;
 import java.util.List;
 
-
 public class PerformanceBenchmark {
 
-    private static final int BENCHMARK_RUNS   = 20;
+    private static final int BENCHMARK_RUNS = 20;
     private static final int LOCAL_WARMUP_RUNS = 5;
-
-
     private static final int BATCH_THRESHOLD = 100_000;
 
     private final SequentialRegression sequentialRegression;
@@ -24,7 +21,6 @@ public class PerformanceBenchmark {
         this.sequentialRegression = new SequentialRegression();
         this.dataGenerator = new DataGenerator();
     }
-
 
     public static class BenchmarkResult {
         public final int dataSize;
@@ -72,11 +68,9 @@ public class PerformanceBenchmark {
         }
     }
 
-
     public BenchmarkResult runBenchmark(int dataSize, int numberOfThreads) {
         return runBenchmark(dataSize, numberOfThreads, 3);
     }
-
 
     public BenchmarkResult runBenchmark(int dataSize, int numberOfThreads, int numberOfVariables) {
         double[] coefficients = new double[numberOfVariables + 1];
@@ -90,63 +84,19 @@ public class PerformanceBenchmark {
         return runBenchmarkWithData(data, numberOfThreads, numberOfVariables);
     }
 
-
     public BenchmarkResult runBenchmarkWithData(List<DataPoint> data, int numberOfThreads, int numberOfVariables) {
-        ParallelRegression parallelRegression = new ParallelRegression(numberOfThreads);
-
-
-        int repetitions = batchRepetitions(data.size());
-
-
-        for (int i = 0; i < LOCAL_WARMUP_RUNS; i++) {
-            for (int r = 0; r < repetitions; r++) {
-                sequentialRegression.calculate(data);
-            }
-            for (int r = 0; r < repetitions; r++) {
-                parallelRegression.calculate(data);
-            }
-        }
-
-
-        double[] seqTimes = new double[BENCHMARK_RUNS];
-        double[] parTimes = new double[BENCHMARK_RUNS];
-        RegressionResult lastSeqResult = null;
-        RegressionResult lastParResult = null;
-
-        for (int run = 0; run < BENCHMARK_RUNS; run++) {
-
-            long seqStart = System.nanoTime();
-            for (int r = 0; r < repetitions; r++) {
-                lastSeqResult = sequentialRegression.calculate(data);
-            }
-            seqTimes[run] = (System.nanoTime() - seqStart) / 1_000_000.0 / repetitions;
-
-
-            long parStart = System.nanoTime();
-            for (int r = 0; r < repetitions; r++) {
-                lastParResult = parallelRegression.calculate(data);
-            }
-            parTimes[run] = (System.nanoTime() - parStart) / 1_000_000.0 / repetitions;
-        }
-
-        Arrays.sort(seqTimes);
-        Arrays.sort(parTimes);
-
-        return new BenchmarkResult(
-                data.size(),
-                numberOfThreads,
-                numberOfVariables,
-                median(seqTimes),
-                median(parTimes),
-                lastSeqResult,
-                lastParResult);
+        return runBenchmarkInternal(data, new ParallelRegression(numberOfThreads), numberOfVariables, 10);
     }
-
 
     public BenchmarkResult runBenchmarkWithTaskMultiplier(List<DataPoint> data,
             int numberOfThreads, int numberOfVariables, int taskMultiplier) {
-        ParallelRegression parallelRegression = new ParallelRegression(numberOfThreads, taskMultiplier);
+        return runBenchmarkInternal(data, new ParallelRegression(numberOfThreads, taskMultiplier),
+                numberOfVariables, taskMultiplier);
+    }
 
+    private BenchmarkResult runBenchmarkInternal(List<DataPoint> data,
+            ParallelRegression parallelRegression,
+            int numberOfVariables, int taskMultiplier) {
         int repetitions = batchRepetitions(data.size());
 
         for (int i = 0; i < LOCAL_WARMUP_RUNS; i++) {
@@ -182,7 +132,7 @@ public class PerformanceBenchmark {
 
         return new BenchmarkResult(
                 data.size(),
-                numberOfThreads,
+                parallelRegression.getNumberOfThreads(),
                 numberOfVariables,
                 taskMultiplier,
                 median(seqTimes),
@@ -191,14 +141,12 @@ public class PerformanceBenchmark {
                 lastParResult);
     }
 
-
     private static int batchRepetitions(int dataSize) {
         if (dataSize >= BATCH_THRESHOLD) {
             return 1;
         }
         return Math.max(1, BATCH_THRESHOLD / dataSize);
     }
-
 
     private static double median(double[] sorted) {
         int n = sorted.length;
@@ -207,7 +155,6 @@ public class PerformanceBenchmark {
         }
         return sorted[n / 2];
     }
-
 
     public void warmUpJVM() {
         System.out.println("JVM Warm-Up...");

@@ -6,7 +6,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
 
-
 public class DataGenerator {
 
     private final Random random;
@@ -18,7 +17,6 @@ public class DataGenerator {
     public DataGenerator(long seed) {
         this.random = new Random(seed);
     }
-
 
     public List<DataPoint> generateMultipleRegressionData(int size, double[] coefficients,
             double noiseLevel) {
@@ -41,11 +39,9 @@ public class DataGenerator {
         return dataPoints;
     }
 
-
     public List<DataPoint> generatePerfectMultipleData(int size, double[] coefficients) {
         return generateMultipleRegressionData(size, coefficients, 0.0);
     }
-
 
     public List<DataPoint> generateLinearData(int size, double a, double b, double noiseLevel) {
         List<DataPoint> dataPoints = new ArrayList<>(size);
@@ -61,12 +57,7 @@ public class DataGenerator {
         return dataPoints;
     }
 
-
-
-
     public List<DataPoint> generatePerfectLinearData(int size, double a, double b) {
         return generateLinearData(size, a, b, 0.0);
     }
-
-
 }

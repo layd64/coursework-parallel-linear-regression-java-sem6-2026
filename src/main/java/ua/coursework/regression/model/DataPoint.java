@@ -2,11 +2,9 @@ package ua.coursework.regression.model;
 
 import java.util.Arrays;
 
-
 public class DataPoint {
     private final double[] x;
     private final double y;
-
 
     public DataPoint(double[] x, double y) {
         if (x == null || x.length == 0) {
@@ -16,11 +14,9 @@ public class DataPoint {
         this.y = y;
     }
 
-
     public double getX(int index) {
         return x[index];
     }
-
 
     public int getNumberOfVariables() {
         return x.length;

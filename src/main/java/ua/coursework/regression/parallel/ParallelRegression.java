@@ -8,12 +8,10 @@ import java.util.List;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.DoubleAdder;
 
-
 public class ParallelRegression {
 
     private final int numberOfThreads;
     private final int taskMultiplier;
-
 
     public ParallelRegression(int numberOfThreads, int taskMultiplier) {
         if (numberOfThreads < 1) {
@@ -34,7 +32,6 @@ public class ParallelRegression {
         this(Runtime.getRuntime().availableProcessors(), 10);
     }
 
-
     public RegressionResult calculate(List<DataPoint> dataPoints) {
         if (dataPoints == null || dataPoints.isEmpty()) {
             throw new IllegalArgumentException("Data points list cannot be empty");
@@ -54,7 +51,6 @@ public class ParallelRegression {
         ExecutorService executor = Executors.newFixedThreadPool(numberOfThreads);
 
         try {
-
             DoubleAdder[] sumXAdders = new DoubleAdder[n];
             for (int j = 0; j < n; j++) {
                 sumXAdders[j] = new DoubleAdder();
@@ -102,7 +98,6 @@ public class ParallelRegression {
                 meansX[j] = sumXAdders[j].sum() / m;
             }
             double meanY = sumYAdder.sum() / m;
-
 
             DoubleAdder[] varXAdders = new DoubleAdder[n];
             for (int j = 0; j < n; j++) {
@@ -154,7 +149,6 @@ public class ParallelRegression {
             if (stdDevY == 0)
                 stdDevY = 1;
 
-
             DoubleAdder[][] xtxAdders = new DoubleAdder[p][p];
             DoubleAdder[] xtyAdders = new DoubleAdder[p];
             for (int j = 0; j < p; j++) {
@@ -180,7 +174,6 @@ public class ParallelRegression {
 
             matrixLatch.await();
 
-
             double[][] xtx = new double[p][p];
             double[] xty = new double[p];
             for (int j = 0; j < p; j++) {
@@ -190,9 +183,7 @@ public class ParallelRegression {
                 }
             }
 
-
             double[] normCoefficients = solveLinearSystemParallel(xtx, xty, p, executor);
-
 
             double[] coefficients = new double[p];
             final double finalStdDevY = stdDevY;
@@ -221,25 +212,19 @@ public class ParallelRegression {
             interceptLatch.await();
             coefficients[0] = interceptAdder.sum();
 
-            int finalNumTasks = numTasks;
-
             long endTime = System.nanoTime();
             double computationTime = (endTime - startTime) / 1_000_000.0;
 
             RegressionResult result = new RegressionResult(coefficients, computationTime, m, n);
             result.setNormalizationParams(meansX, stdDevsX, meanY, stdDevY);
 
-
-            double rSquared = calculateRSquaredParallel(dataPoints, result, meanY, executor,
-                    finalNumTasks);
+            double rSquared = calculateRSquaredParallel(dataPoints, result, meanY, executor, numTasks);
             result.setRSquared(rSquared);
 
             double adjustedR2 = 1 - (1 - rSquared) * (m - 1.0) / (m - p - 1);
             result.setAdjustedRSquared(adjustedR2);
 
-
-            calculateSignificanceParallel(dataPoints, result, xtx, executor,
-                    finalNumTasks);
+            calculateSignificanceParallel(dataPoints, result, xtx, executor, numTasks);
 
             return result;
 
@@ -258,7 +243,6 @@ public class ParallelRegression {
             }
         }
     }
-
 
     private double calculateRSquaredParallel(List<DataPoint> dataPoints,
             RegressionResult result,
@@ -295,7 +279,6 @@ public class ParallelRegression {
             return 1.0;
         return 1 - (ssResidual / ssTotal);
     }
-
 
     private void calculateSignificanceParallel(List<DataPoint> dataPoints,
             RegressionResult result,
@@ -335,7 +318,6 @@ public class ParallelRegression {
 
         double sigmaSquared = ssResAdder.sum() / (m - p);
 
-
         double[][] xtxInverse = SequentialRegression.invertMatrix(xtx, p);
 
         double[] standardErrors = new double[p];
@@ -363,7 +345,6 @@ public class ParallelRegression {
         result.setPValues(pValues);
     }
 
-
     private static double[] solveLinearSystemParallel(double[][] A, double[] b, int n,
             ExecutorService executor) throws InterruptedException {
 
@@ -375,7 +356,6 @@ public class ParallelRegression {
         }
 
         for (int k = 0; k < n; k++) {
-
             int maxRow = k;
             double maxVal = Math.abs(a[k][k]);
             for (int i = k + 1; i < n; i++) {
@@ -439,9 +419,6 @@ public class ParallelRegression {
         return taskMultiplier;
     }
 
-
-
-
     private static class MatrixAccumulationTask implements Runnable {
         private final List<DataPoint> dataPoints;
         private final int n;
@@ -473,18 +450,15 @@ public class ParallelRegression {
 
         @Override
         public void run() {
-
             double[][] localXtX = new double[p][p];
             double[] localXtY = new double[p];
 
             double[] normX = new double[n];
             for (DataPoint point : dataPoints) {
-
                 for (int j = 0; j < n; j++) {
                     normX[j] = (point.getX(j) - meansX[j]) / stdDevsX[j];
                 }
                 double normYVal = (point.getY() - meanY) / stdDevY;
-
 
                 localXtX[0][0] += 1;
                 localXtY[0] += normYVal;
@@ -500,7 +474,6 @@ public class ParallelRegression {
                 }
             }
 
-
             for (int j = 0; j < p; j++) {
                 xtyAdders[j].add(localXtY[j]);
                 for (int k = 0; k < p; k++) {
@@ -511,7 +484,6 @@ public class ParallelRegression {
             latch.countDown();
         }
     }
-
 
     private static class RSquaredTask implements Runnable {
         private final List<DataPoint> dataPoints;
@@ -535,7 +507,6 @@ public class ParallelRegression {
 
         @Override
         public void run() {
-
             double localSsTotal = 0;
             double localSsResidual = 0;
 
@@ -546,7 +517,6 @@ public class ParallelRegression {
                 localSsTotal += Math.pow(y - meanY, 2);
                 localSsResidual += Math.pow(y - yPredicted, 2);
             }
-
 
             atomicSsTotal.add(localSsTotal);
             atomicSsResidual.add(localSsResidual);

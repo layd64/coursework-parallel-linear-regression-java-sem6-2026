@@ -5,9 +5,7 @@ import ua.coursework.regression.model.RegressionResult;
 
 import java.util.List;
 
-
 public class SequentialRegression {
-
 
     public RegressionResult calculate(List<DataPoint> dataPoints) {
         if (dataPoints == null || dataPoints.isEmpty()) {
@@ -24,7 +22,6 @@ public class SequentialRegression {
 
         long startTime = System.nanoTime();
 
-
         double[] meansX = new double[n];
         double meanY = 0;
 
@@ -38,7 +35,6 @@ public class SequentialRegression {
             meansX[j] /= m;
         }
         meanY /= m;
-
 
         double[] stdDevsX = new double[n];
         double stdDevY = 0;
@@ -59,21 +55,17 @@ public class SequentialRegression {
                 stdDevsX[j] = 1;
         }
 
-
-
         double[][] xtx = new double[p][p];
         double[] xty = new double[p];
 
         for (int i = 0; i < m; i++) {
             DataPoint point = dataPoints.get(i);
-            
 
             double normY_i = (point.getY() - meanY) / stdDevY;
             double[] normX_i = new double[n];
             for (int j = 0; j < n; j++) {
                 normX_i[j] = (point.getX(j) - meansX[j]) / stdDevsX[j];
             }
-
 
             xtx[0][0] += 1;
             xty[0] += normY_i;
@@ -89,10 +81,7 @@ public class SequentialRegression {
             }
         }
 
-
         double[] normCoefficients = solveLinearSystem(xtx, xty, p);
-
-
 
         double[] coefficients = new double[p];
         coefficients[0] = meanY + stdDevY * normCoefficients[0];
@@ -106,9 +95,7 @@ public class SequentialRegression {
 
         RegressionResult result = new RegressionResult(coefficients, computationTime, m, n);
 
-
         result.setNormalizationParams(meansX, stdDevsX, meanY, stdDevY);
-
 
         double rSquared = calculateRSquared(dataPoints, result, meanY);
         result.setRSquared(rSquared);
@@ -116,18 +103,15 @@ public class SequentialRegression {
         double adjustedR2 = 1 - (1 - rSquared) * (m - 1.0) / (m - p - 1);
         result.setAdjustedRSquared(adjustedR2);
 
-
         calculateSignificance(dataPoints, result, xtx);
 
         return result;
     }
 
-
     public double calculateRSquared(List<DataPoint> dataPoints, RegressionResult result, double meanY) {
         if (dataPoints == null || dataPoints.isEmpty()) {
             throw new IllegalArgumentException("Data points list cannot be empty");
         }
-
 
         double ssTotal = 0;
         double ssResidual = 0;
@@ -145,12 +129,10 @@ public class SequentialRegression {
         return 1 - (ssResidual / ssTotal);
     }
 
-
     private void calculateSignificance(List<DataPoint> dataPoints,
             RegressionResult result, double[][] xtx) {
         int m = dataPoints.size();
         int p = result.getNumberOfVariables() + 1;
-
 
         double ssResidual = 0;
         for (DataPoint point : dataPoints) {
@@ -159,7 +141,6 @@ public class SequentialRegression {
             ssResidual += residual * residual;
         }
         double sigmaSquared = ssResidual / (m - p);
-
 
         double[][] xtxInverse = invertMatrix(xtx, p);
 
@@ -170,9 +151,7 @@ public class SequentialRegression {
         double[] coefficients = result.getCoefficients();
 
         for (int i = 0; i < p; i++) {
-
             standardErrors[i] = Math.sqrt(Math.abs(sigmaSquared * xtxInverse[i][i]));
-
 
             if (standardErrors[i] > 1e-10) {
                 tStatistics[i] = coefficients[i] / standardErrors[i];
@@ -193,11 +172,7 @@ public class SequentialRegression {
         result.setPValues(pValues);
     }
 
-
-
-
     public static double[] solveLinearSystem(double[][] A, double[] b, int n) {
-
         double[][] a = new double[n][n];
         double[] rhs = new double[n];
         for (int i = 0; i < n; i++) {
@@ -205,9 +180,7 @@ public class SequentialRegression {
             rhs[i] = b[i];
         }
 
-
         for (int k = 0; k < n; k++) {
-
             int maxRow = k;
             double maxVal = Math.abs(a[k][k]);
             for (int i = k + 1; i < n; i++) {
@@ -217,14 +190,12 @@ public class SequentialRegression {
                 }
             }
 
-
             double[] tempRow = a[k];
             a[k] = a[maxRow];
             a[maxRow] = tempRow;
             double tempVal = rhs[k];
             rhs[k] = rhs[maxRow];
             rhs[maxRow] = tempVal;
-
 
             if (Math.abs(a[k][k]) < 1e-12) {
                 throw new ArithmeticException(
@@ -241,7 +212,6 @@ public class SequentialRegression {
             }
         }
 
-
         double[] x = new double[n];
         for (int i = n - 1; i >= 0; i--) {
             x[i] = rhs[i];
@@ -256,9 +226,7 @@ public class SequentialRegression {
         return x;
     }
 
-
     public static double[][] invertMatrix(double[][] matrix, int n) {
-
         double[][] aug = new double[n][2 * n];
         for (int i = 0; i < n; i++) {
             for (int j = 0; j < n; j++) {
@@ -267,9 +235,7 @@ public class SequentialRegression {
             aug[i][n + i] = 1;
         }
 
-
         for (int k = 0; k < n; k++) {
-
             int maxRow = k;
             double maxVal = Math.abs(aug[k][k]);
             for (int i = k + 1; i < n; i++) {
@@ -287,11 +253,9 @@ public class SequentialRegression {
             if (Math.abs(pivot) < 1e-12)
                 continue;
 
-
             for (int j = 0; j < 2 * n; j++) {
                 aug[k][j] /= pivot;
             }
-
 
             for (int i = 0; i < n; i++) {
                 if (i == k)
@@ -303,7 +267,6 @@ public class SequentialRegression {
             }
         }
 
-
         double[][] inverse = new double[n][n];
         for (int i = 0; i < n; i++) {
             for (int j = 0; j < n; j++) {
@@ -314,27 +277,22 @@ public class SequentialRegression {
         return inverse;
     }
 
-
     public static double calculatePValue(double t, int df) {
         if (df <= 0)
             return 1.0;
         if (Double.isInfinite(t))
             return 0.0;
 
-
         double z;
         if (df > 30) {
             z = t;
         } else {
-
             z = t * (1 - 1.0 / (4.0 * df));
         }
-
 
         double p = 2 * (1 - normalCDF(Math.abs(z)));
         return Math.max(0, Math.min(1, p));
     }
-
 
     private static double normalCDF(double x) {
         if (x < -8)

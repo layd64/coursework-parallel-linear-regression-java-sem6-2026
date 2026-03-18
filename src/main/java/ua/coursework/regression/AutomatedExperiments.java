@@ -1,8 +1,15 @@
 package ua.coursework.regression;
 
+import ua.coursework.regression.benchmark.DataGenerator;
 import ua.coursework.regression.benchmark.PerformanceBenchmark;
-import java.util.List;
+import ua.coursework.regression.model.DataPoint;
+import ua.coursework.regression.model.RegressionResult;
+import ua.coursework.regression.parallel.ParallelRegression;
+import ua.coursework.regression.sequential.SequentialRegression;
 
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Random;
 
 public class AutomatedExperiments {
 
@@ -16,10 +23,10 @@ public class AutomatedExperiments {
         benchmark.warmUpJVM();
 
         System.out.println("Generating a single massive dataset (10,000,000 rows, 3 variables) ...");
-        ua.coursework.regression.benchmark.DataGenerator generator = new ua.coursework.regression.benchmark.DataGenerator();
+        DataGenerator generator = new DataGenerator();
         double[] trueCoefficients = { 5.0, 2.0, -1.5, 4.0 };
         int maxDataSize = 10_000_000;
-        List<ua.coursework.regression.model.DataPoint> massiveData = generator.generateMultipleRegressionData(
+        List<DataPoint> massiveData = generator.generateMultipleRegressionData(
                 maxDataSize, trueCoefficients, 1.0);
         System.out.println("Data generated successfully! Mem size: ~" + (maxDataSize * 32 / 1024 / 1024) + " MB");
         System.out.println();
@@ -28,20 +35,19 @@ public class AutomatedExperiments {
         System.out.println("Available processors: " + optimalThreads);
         System.out.println();
 
-
         System.out.println("=== EXPERIMENT 1: Mathematical Correctness ===");
         System.out.println();
-        List<ua.coursework.regression.model.DataPoint> correctData = massiveData.subList(0, 50_000);
+        List<DataPoint> correctData = massiveData.subList(0, 50_000);
 
         System.out.println("--- 1.1 Sequential Algorithm vs True Analytical Solution ---");
         System.out.println("Validating baseline sequential algorithm accuracy (3 variables)...");
-        ua.coursework.regression.sequential.SequentialRegression seq = new ua.coursework.regression.sequential.SequentialRegression();
-        ua.coursework.regression.model.RegressionResult seqRes = seq.calculate(correctData);
-        
+        SequentialRegression seq = new SequentialRegression();
+        RegressionResult seqRes = seq.calculate(correctData);
+
         double[] sCoeffs = seqRes.getCoefficients();
         boolean seqCorrect = true;
         double maxSeqErr = 0;
-        
+
         System.out.printf("%-6s | %-12s | %-12s | %-12s%n", "Index", "True", "Sequential", "Absolute Error");
         System.out.println("─".repeat(55));
         for (int i = 0; i < sCoeffs.length; i++) {
@@ -54,9 +60,8 @@ public class AutomatedExperiments {
         System.out.println();
 
         System.out.println("--- 1.2 Parallel Algorithm vs Sequential Baseline ---");
-        ua.coursework.regression.parallel.ParallelRegression par = new ua.coursework.regression.parallel.ParallelRegression(
-                optimalThreads);
-        ua.coursework.regression.model.RegressionResult parRes = par.calculate(correctData);
+        ParallelRegression par = new ParallelRegression(optimalThreads);
+        RegressionResult parRes = par.calculate(correctData);
 
         System.out.println("Sub-dataset size: 50,000 (extracted from main 10M array)");
         System.out.println("Sequential Eq: " + seqRes.getEquation());
@@ -80,22 +85,22 @@ public class AutomatedExperiments {
         int largeVarCount = 99;
         int largeCoeffCount = largeVarCount + 1;
         double[] largeTrue = new double[largeCoeffCount];
-        java.util.Random rng = new java.util.Random(123);
+        Random rng = new Random(123);
         for (int i = 0; i < largeCoeffCount; i++) {
             largeTrue[i] = Math.round((rng.nextDouble() * 20 - 10) * 100.0) / 100.0;
         }
 
-        ua.coursework.regression.benchmark.DataGenerator gen100 = new ua.coursework.regression.benchmark.DataGenerator(777);
-        List<ua.coursework.regression.model.DataPoint> data100 = gen100.generateMultipleRegressionData(
+        DataGenerator gen100 = new DataGenerator(777);
+        List<DataPoint> data100 = gen100.generateMultipleRegressionData(
                 500_000, largeTrue, 0.01);
 
         System.out.println("Sub-dataset size: 500,000 rows, " + largeVarCount + " variables");
 
-        ua.coursework.regression.sequential.SequentialRegression seq100 = new ua.coursework.regression.sequential.SequentialRegression();
-        ua.coursework.regression.parallel.ParallelRegression par100 = new ua.coursework.regression.parallel.ParallelRegression(optimalThreads);
+        SequentialRegression seq100 = new SequentialRegression();
+        ParallelRegression par100 = new ParallelRegression(optimalThreads);
 
-        ua.coursework.regression.model.RegressionResult seqRes100 = seq100.calculate(data100);
-        ua.coursework.regression.model.RegressionResult parRes100 = par100.calculate(data100);
+        RegressionResult seqRes100 = seq100.calculate(data100);
+        RegressionResult parRes100 = par100.calculate(data100);
 
         System.out.println("Sequential R2: " + String.format("%.6f", seqRes100.getRSquared()));
         System.out.println("Parallel R2:   " + String.format("%.6f", parRes100.getRSquared()));
@@ -123,10 +128,11 @@ public class AutomatedExperiments {
         System.out.printf("Max |calculated - true| difference: %.4f%n", maxDiffTrue);
         System.out.println("Mismatched coefficients (seq vs par): " + mismatchCount + " / " + sCoeffs100.length);
 
-        System.out.println("First 10 coefficients comparison:");
+        System.out.println("Last 10 coefficients comparison:");
         System.out.printf("%-6s | %-12s | %-12s | %-12s%n", "Index", "True", "Sequential", "Parallel");
         System.out.println("─".repeat(55));
-        for (int i = 0; i < Math.min(10, sCoeffs100.length); i++) {
+        int startIdx = Math.max(0, sCoeffs100.length - 10);
+        for (int i = startIdx; i < sCoeffs100.length; i++) {
             System.out.printf("b%-5d | %12.4f | %12.4f | %12.4f%n", i, largeTrue[i], sCoeffs100[i], pCoeffs100[i]);
         }
 
@@ -137,7 +143,6 @@ public class AutomatedExperiments {
         System.out.println("─────────────────────────────────────────────────────────────");
         System.out.println();
 
-
         System.out.println("=== EXPERIMENT 2: Data Scalability ===");
         System.out.println();
 
@@ -145,9 +150,9 @@ public class AutomatedExperiments {
                 1_000, 10_000, 100_000, 500_000, 1_000_000, 5_000_000, 10_000_000
         };
 
-        java.util.List<PerformanceBenchmark.BenchmarkResult> scalabilityResults = new java.util.ArrayList<>();
+        List<PerformanceBenchmark.BenchmarkResult> scalabilityResults = new ArrayList<>();
         for (int size : dataSizes) {
-            List<ua.coursework.regression.model.DataPoint> subData = massiveData.subList(0, size);
+            List<DataPoint> subData = massiveData.subList(0, size);
             PerformanceBenchmark.BenchmarkResult res = benchmark.runBenchmarkWithData(subData, optimalThreads, 3);
             scalabilityResults.add(res);
             System.out.println(res);
@@ -157,17 +162,16 @@ public class AutomatedExperiments {
         System.out.println("─────────────────────────────────────────────────────────────");
         System.out.println();
 
-
         System.out.println("=== EXPERIMENT 3: Thread Scaling ===");
         System.out.println();
 
         int[] threadCounts = { 1, 2, 4, 6, 8, 12, 16 };
 
-        List<ua.coursework.regression.model.DataPoint> threadData = massiveData.subList(0, 5_000_000);
+        List<DataPoint> threadData = massiveData.subList(0, 5_000_000);
         System.out.println("Testing on fixed subset: 5,000,000 rows");
         System.out.println();
 
-        java.util.List<PerformanceBenchmark.BenchmarkResult> threadScalingResults = new java.util.ArrayList<>();
+        List<PerformanceBenchmark.BenchmarkResult> threadScalingResults = new ArrayList<>();
         for (int threads : threadCounts) {
             PerformanceBenchmark.BenchmarkResult res = benchmark.runBenchmarkWithData(threadData, threads, 3);
             threadScalingResults.add(res);
@@ -178,7 +182,6 @@ public class AutomatedExperiments {
         System.out.println("─────────────────────────────────────────────────────────────");
         System.out.println();
 
-
         System.out.println("=== EXPERIMENT 4: Variable Scaling ===");
         System.out.println();
 
@@ -187,7 +190,7 @@ public class AutomatedExperiments {
         System.out.printf("Testing on generated dataset: %,d rows%n", fixedScalingDataSize);
         System.out.println();
 
-        java.util.List<PerformanceBenchmark.BenchmarkResult> variableScalingResults = new java.util.ArrayList<>();
+        List<PerformanceBenchmark.BenchmarkResult> variableScalingResults = new ArrayList<>();
         for (int vars : variableCounts) {
             PerformanceBenchmark.BenchmarkResult res = benchmark.runBenchmark(fixedScalingDataSize, optimalThreads,
                     vars);
@@ -199,17 +202,16 @@ public class AutomatedExperiments {
         System.out.println("─────────────────────────────────────────────────────────────");
         System.out.println();
 
-
         System.out.println("=== EXPERIMENT 5: Task Granularity (Subtask Count) ===");
         System.out.println();
 
         int[] taskMultipliers = { 1, 2, 5, 10, 20, 50, 100 };
-        List<ua.coursework.regression.model.DataPoint> taskData = massiveData.subList(0, 5_000_000);
+        List<DataPoint> taskData = massiveData.subList(0, 5_000_000);
         System.out.printf("Fixed: %,d rows, %d threads, 3 variables%n", 5_000_000, optimalThreads);
-        System.out.println("Varying task multiplier (subtasks = threads × multiplier)");
+        System.out.println("Varying task multiplier (subtasks = threads * multiplier)");
         System.out.println();
 
-        java.util.List<PerformanceBenchmark.BenchmarkResult> taskGranularityResults = new java.util.ArrayList<>();
+        List<PerformanceBenchmark.BenchmarkResult> taskGranularityResults = new ArrayList<>();
         for (int mult : taskMultipliers) {
             PerformanceBenchmark.BenchmarkResult res = benchmark.runBenchmarkWithTaskMultiplier(
                     taskData, optimalThreads, 3, mult);
@@ -222,7 +224,6 @@ public class AutomatedExperiments {
         System.out.println();
         System.out.println("─────────────────────────────────────────────────────────────");
         System.out.println();
-
 
         System.out.println("=== EXPERIMENT 6: Detailed Summary ===");
         System.out.println();
@@ -287,7 +288,6 @@ public class AutomatedExperiments {
                 .orElse(results.get(0).sequentialTimeMs);
 
         for (PerformanceBenchmark.BenchmarkResult result : results) {
-
             double speedup = baselineTime / result.parallelTimeMs;
             double efficiency = speedup / result.numberOfThreads;
 
@@ -298,12 +298,6 @@ public class AutomatedExperiments {
                     speedup,
                     efficiency);
         }
-
-        System.out.println();
-        System.out.println("Efficiency = Speedup / N (прискорення на одиницю обчислювального ресурсу)");
-        System.out.println("Прискорення тут рахується відносно найшвидшого 1-потокового часу (T1),");
-        System.out.println("щоб ізолювати ефективність саме розпаралелювання (Efficiency <= 1.0).");
-        System.out.println("Ideal efficiency = 1.0 (linear speedup)");
     }
 
     private static void analyzeVariableScaling(List<PerformanceBenchmark.BenchmarkResult> results) {
@@ -320,12 +314,6 @@ public class AutomatedExperiments {
                     result.parallelTimeMs,
                     result.speedup);
         }
-
-        System.out.println();
-        System.out.println("Note: As the number of variables (n) increases, the algorithmic complexity of");
-        System.out.println("building the X^T * X matrix grows as O(m * n^2). The task shifts from being");
-        System.out.println("memory-bound to compute-bound, allowing the CPU cores to be fully utilized.");
-        System.out.println("Consequently, the parallel speedup significantly improves.");
     }
 
     private static void analyzeTaskGranularity(List<PerformanceBenchmark.BenchmarkResult> results) {
@@ -344,10 +332,5 @@ public class AutomatedExperiments {
                     result.parallelTimeMs,
                     result.speedup);
         }
-
-        System.out.println();
-        System.out.println("Note: Multiplier=1 means subtasks=threads (no over-decomposition).");
-        System.out.println("Higher multipliers create more fine-grained tasks, allowing better");
-        System.out.println("load balancing across threads at the cost of increased scheduling overhead.");
     }
 }

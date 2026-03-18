@@ -2,7 +2,6 @@ package ua.coursework.regression.model;
 
 import java.util.Arrays;
 
-
 public class RegressionResult {
     private final double[] coefficients;
     private final double computationTimeMs;
@@ -21,7 +20,6 @@ public class RegressionResult {
     private double stdDevY;
     private boolean normalized;
 
-
     public RegressionResult(double[] coefficients, double computationTimeMs,
             int dataSize, int numberOfVariables) {
         this.coefficients = Arrays.copyOf(coefficients, coefficients.length);
@@ -31,21 +29,13 @@ public class RegressionResult {
         this.normalized = false;
     }
 
-
-
-
-
-
     public double getCoefficient(int index) {
         return coefficients[index];
     }
 
-
     public double[] getCoefficients() {
         return Arrays.copyOf(coefficients, coefficients.length);
     }
-
-
 
     public double getComputationTimeMs() {
         return computationTimeMs;
@@ -58,8 +48,6 @@ public class RegressionResult {
     public int getNumberOfVariables() {
         return numberOfVariables;
     }
-
-
 
     public double getRSquared() {
         return rSquared;
@@ -76,8 +64,6 @@ public class RegressionResult {
     public void setAdjustedRSquared(double adjustedRSquared) {
         this.adjustedRSquared = adjustedRSquared;
     }
-
-
 
     public double[] getStandardErrors() {
         return standardErrors != null ? Arrays.copyOf(standardErrors, standardErrors.length) : null;
@@ -102,8 +88,6 @@ public class RegressionResult {
     public void setPValues(double[] pValues) {
         this.pValues = Arrays.copyOf(pValues, pValues.length);
     }
-
-
 
     public void setNormalizationParams(double[] meansX, double[] stdDevsX,
             double meanY, double stdDevY) {
@@ -134,7 +118,6 @@ public class RegressionResult {
         return stdDevY;
     }
 
-
     public double predict(DataPoint point) {
         if (point.getNumberOfVariables() != numberOfVariables) {
             throw new IllegalArgumentException(
@@ -146,7 +129,6 @@ public class RegressionResult {
         }
         return y;
     }
-
 
     public double predict(double[] x) {
         if (x.length != numberOfVariables) {
@@ -160,8 +142,6 @@ public class RegressionResult {
         return y;
     }
 
-
-
     @Override
     public String toString() {
         StringBuilder sb = new StringBuilder();
@@ -173,7 +153,6 @@ public class RegressionResult {
         sb.append("\n");
         sb.append(String.format("Computation Time: %.3f ms%n", computationTimeMs));
         sb.append(String.format("Points count: %d, Variables: %d", dataSize, numberOfVariables));
-
 
         if (tStatistics != null && pValues != null) {
             sb.append("\n\n--- Coefficients Significance ---\n");
@@ -192,7 +171,6 @@ public class RegressionResult {
 
         return sb.toString();
     }
-
 
     public String getEquation() {
         StringBuilder sb = new StringBuilder("y = ");
